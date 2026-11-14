@@ -1,0 +1,18 @@
+<% if (has.auth) { -%>
+import type { AuthUser } from '../lib/jwt.js';
+
+/** Typed values that middleware stores on the request context (`c.set` / `c.get`). */
+export type AppEnv = {
+  Variables: {
+    user: AuthUser;
+  };
+};
+<% } else { -%>
+/**
+ * Typed values that middleware stores on the request context (`c.set` / `c.get`).
+ * Add entries here, e.g. `Variables: { requestId: string }`.
+ */
+export type AppEnv = {
+  Variables: Record<string, never>;
+};
+<% } -%>

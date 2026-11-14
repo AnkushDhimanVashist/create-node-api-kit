@@ -1,0 +1,46 @@
+import { Router } from 'express';
+<% if (has.auth) { -%>
+import { forbidden } from '../../common/errors.js';
+import { getAuthUser, requireAuth } from '../../common/middleware/require-auth.js';
+<% } -%>
+import { validate } from '../../common/validate.js';
+<% if (has.auth) { -%>
+import { listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } else { -%>
+import { createUserSchema, listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } -%>
+import { userService } from './user.service.js';
+
+/** HTTP layer only: validate input, call the service, send the response. */
+export const userRouter = Router();
+<% if (has.auth) { -%>
+
+// Every users route needs a valid access token. New users sign up via POST /api/auth/register.
+userRouter.use(requireAuth);
+<% } -%>
+
+userRouter.get('/', async (req, res) => {
+  const query = validate(listUsersQuerySchema, req.query);
+  res.json(await userService.list(query));
+});
+
+userRouter.get('/:id', async (req, res) => {
+  const { id } = validate(userIdParamsSchema, req.params);
+  res.json(await userService.getById(id));
+});
+<% if (!has.auth) { -%>
+
+userRouter.post('/', async (req, res) => {
+  const input = validate(createUserSchema, req.body);
+  res.status(201).json(await userService.create(input));
+});
+<% } -%>
+
+userRouter.delete('/:id', async (req, res) => {
+  const { id } = validate(userIdParamsSchema, req.params);
+<% if (has.auth) { -%>
+  if (getAuthUser(res).id !== id) throw forbidden('You can only delete your own account');
+<% } -%>
+  await userService.delete(id);
+  res.status(204).end();
+});

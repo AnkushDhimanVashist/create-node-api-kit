@@ -1,0 +1,56 @@
+{
+  "name": "create-node-api-kit",
+  "version": "0.1.0",
+  "description": "Scaffold a production-ready Node.js API in seconds. Pick Express, Fastify, NestJS or Hono, a database, TypeScript or JavaScript, and only the features you need.",
+  "author": "Ankush Dhiman Vashist (https://github.com/AnkushDhimanVashist)",
+  "homepage": "https://ankushdhimanvashist.github.io/create-node-api-kit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnkushDhimanVashist/create-node-api-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AnkushDhimanVashist/create-node-api-kit/issues"
+  },
+  "type": "module",
+  "bin": {
+    "create-node-api-kit": "bin/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node bin/index.js",
+    "test": "node --test test/*.test.js",
+    "test:matrix": "node scripts/test-matrix.js",
+    "lint": "prettier --check ."
+  },
+  "keywords": [
+    "node",
+    "nodejs",
+    "boilerplate",
+    "template",
+    "starter",
+    "express",
+    "fastify",
+    "nestjs",
+    "hono",
+    "prisma",
+    "drizzle",
+    "mongoose",
+    "typescript",
+    "cli",
+    "create"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^1.9.0",
+    "ejs": "^7.0.2",
+    "picocolors": "^1.1.1",
+    "prettier": "^3.10.1"
+  }
+}

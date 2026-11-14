@@ -1,0 +1,22 @@
+import { beforeEach, vi } from 'vitest';
+import { resetUsers } from './helpers/in-memory-user-repository.js';
+
+// Swap the database-backed repository for an in-memory one in every test.
+vi.mock('../src/modules/users/user.repository.js', () => import('./helpers/in-memory-user-repository.js'));
+<% if (has.redis) { -%>
+
+// Tests never need a running Redis: the cache simply always misses.
+vi.mock('../src/lib/cache.js', () => ({
+  cache: {
+    get: async () => null,
+    set: async () => undefined,
+    del: async () => undefined,
+    delByPrefix: async () => undefined,
+    wrap: async <T>(_key: string, _ttl: number, fn: () => Promise<T>) => fn(),
+  },
+}));
+<% } -%>
+
+beforeEach(() => {
+  resetUsers();
+});

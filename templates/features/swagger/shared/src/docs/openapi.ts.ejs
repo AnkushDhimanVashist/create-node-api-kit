@@ -1,0 +1,146 @@
+import { z } from 'zod';
+<% if (has.auth) { -%>
+import { authResponseSchema, loginSchema, registerSchema } from '../modules/auth/auth.schema.js';
+<% } -%>
+<% if (has.auth) { -%>
+import { listUsersQuerySchema, publicUserSchema } from '../modules/users/user.schema.js';
+<% } else { -%>
+import { createUserSchema, listUsersQuerySchema, publicUserSchema } from '../modules/users/user.schema.js';
+<% } -%>
+
+/**
+ * OpenAPI 3.1 document, generated from the same Zod schemas that validate requests,
+ * so the docs can never drift from the real validation rules.
+ * Add an entry to `paths` whenever you add a route.
+ */
+const schema = (s: z.ZodType) => z.toJSONSchema(s, { io: 'input', target: 'openapi-3.0' });
+const json = (s: z.ZodType) => ({ content: { 'application/json': { schema: schema(s) } } });
+
+const errorResponse = (description: string) => ({
+  description,
+  ...json(z.object({ error: z.object({ code: z.string(), message: z.string(), details: z.unknown().optional() }) })),
+});
+
+const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' } };
+const pageParams = Object.entries(schema(listUsersQuerySchema).properties ?? {}).map(([name, s]) => ({
+  name,
+  in: 'query',
+  required: false,
+  schema: s,
+}));
+<% if (has.auth) { -%>
+const secured = { security: [{ bearerAuth: [] }] };
+<% } -%>
+
+export const openApiDocument = {
+  openapi: '3.1.0',
+  info: {
+    title: '<%= projectName %> API',
+    version: '0.1.0',
+  },
+<% if (has.auth) { -%>
+  components: {
+    securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+  },
+<% } -%>
+  paths: {
+    '/health': {
+      get: { tags: ['Health'], summary: 'Liveness probe', responses: { 200: { description: 'OK' } } },
+    },
+    '/health/ready': {
+      get: {
+        tags: ['Health'],
+        summary: 'Readiness probe (checks dependencies)',
+        responses: { 200: { description: 'Ready' }, 503: { description: 'A dependency is down' } },
+      },
+    },
+<% if (has.auth) { -%>
+    '/api/auth/register': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Create an account',
+        requestBody: { required: true, ...json(registerSchema) },
+        responses: {
+          201: { description: 'Registered', ...json(authResponseSchema) },
+          400: errorResponse('Validation failed'),
+          409: errorResponse('Email already in use'),
+        },
+      },
+    },
+    '/api/auth/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Log in and get an access token',
+        requestBody: { required: true, ...json(loginSchema) },
+        responses: {
+          200: { description: 'Logged in', ...json(authResponseSchema) },
+          401: errorResponse('Invalid credentials'),
+        },
+      },
+    },
+    '/api/auth/me': {
+      get: {
+        tags: ['Auth'],
+        summary: 'The current user',
+        ...secured,
+        responses: { 200: { description: 'OK', ...json(publicUserSchema) }, 401: errorResponse('Unauthorized') },
+      },
+    },
+<% } -%>
+    '/api/users': {
+      get: {
+        tags: ['Users'],
+        summary: 'List users',
+<% if (has.auth) { -%>
+        ...secured,
+<% } -%>
+        parameters: pageParams,
+        responses: {
+          200: {
+            description: 'OK',
+            ...json(
+              z.object({
+                items: z.array(publicUserSchema),
+                total: z.number(),
+                limit: z.number(),
+                offset: z.number(),
+              }),
+            ),
+          },
+        },
+      },
+<% if (!has.auth) { -%>
+      post: {
+        tags: ['Users'],
+        summary: 'Create a user',
+        requestBody: { required: true, ...json(createUserSchema) },
+        responses: {
+          201: { description: 'Created', ...json(publicUserSchema) },
+          400: errorResponse('Validation failed'),
+          409: errorResponse('Email already in use'),
+        },
+      },
+<% } -%>
+    },
+    '/api/users/{id}': {
+      get: {
+        tags: ['Users'],
+        summary: 'Get a user',
+<% if (has.auth) { -%>
+        ...secured,
+<% } -%>
+        parameters: [idParam],
+        responses: { 200: { description: 'OK', ...json(publicUserSchema) }, 404: errorResponse('Not found') },
+      },
+      delete: {
+        tags: ['Users'],
+        summary: 'Delete a user',
+<% if (has.auth) { -%>
+        ...secured,
+<% } -%>
+        parameters: [idParam],
+        responses: { 204: { description: 'Deleted' }, 404: errorResponse('Not found') },
+      },
+    },
+  },
+};

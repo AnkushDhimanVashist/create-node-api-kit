@@ -1,0 +1,42 @@
+import { count, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db.js';
+import { users } from '../../db/schema.js';
+import type { UserRepository } from './user.entity.js';
+
+const userFields = {
+  id: users.id,
+  email: users.email,
+  name: users.name,
+<% if (has.auth) { -%>
+  passwordHash: users.passwordHash,
+<% } -%>
+  createdAt: users.createdAt,
+};
+
+/** PostgreSQL implementation of the UserRepository contract, using Drizzle. */
+export const userRepository: UserRepository = {
+  findMany({ limit, offset }) {
+    return db.select(userFields).from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+  },
+  async count() {
+    const [row] = await db.select({ value: count() }).from(users);
+    return row?.value ?? 0;
+  },
+  async findById(id) {
+    const [user] = await db.select(userFields).from(users).where(eq(users.id, id)).limit(1);
+    return user ?? null;
+  },
+  async findByEmail(email) {
+    const [user] = await db.select(userFields).from(users).where(eq(users.email, email)).limit(1);
+    return user ?? null;
+  },
+  async create(data) {
+    const [user] = await db.insert(users).values(data).returning(userFields);
+    if (!user) throw new Error('Insert returned no row');
+    return user;
+  },
+  async delete(id) {
+    const deleted = await db.delete(users).where(eq(users.id, id)).returning({ id: users.id });
+    return deleted.length > 0;
+  },
+};

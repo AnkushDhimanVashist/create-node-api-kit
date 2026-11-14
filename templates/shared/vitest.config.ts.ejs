@@ -1,0 +1,20 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    setupFiles: ['./tests/setup.<%= ext %>'],
+    // Tests get their own, predictable environment. No .env file needed.
+    env: {
+      NODE_ENV: 'test',
+      LOG_LEVEL: 'silent',
+      RATE_LIMIT_MAX: '30',
+<% if (hasDb) { -%>
+      DATABASE_URL: '<%= database === 'mongoose' ? 'mongodb://localhost:27017/test' : 'postgresql://test:test@localhost:5432/test' %>',
+<% } -%>
+<% if (has.auth) { -%>
+      JWT_SECRET: 'test-secret-that-is-long-enough-for-validation',
+<% } -%>
+    },
+  },
+});

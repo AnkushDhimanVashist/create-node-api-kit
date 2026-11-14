@@ -1,0 +1,50 @@
+import { Hono } from 'hono';
+<% if (!has.auth) { -%>
+import { readJson } from '../../common/body.js';
+<% } -%>
+import type { AppEnv } from '../../common/context.js';
+<% if (has.auth) { -%>
+import { forbidden } from '../../common/errors.js';
+import { getAuthUser, requireAuth } from '../../common/middleware/require-auth.js';
+<% } -%>
+import { validate } from '../../common/validate.js';
+<% if (has.auth) { -%>
+import { listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } else { -%>
+import { createUserSchema, listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } -%>
+import { userService } from './user.service.js';
+
+/** HTTP layer only: validate input, call the service, send the response. */
+export const userRoutes = new Hono<AppEnv>();
+<% if (has.auth) { -%>
+
+// Every users route needs a valid access token. New users sign up via POST /api/auth/register.
+userRoutes.use(requireAuth);
+<% } -%>
+
+userRoutes.get('/', async (c) => {
+  const query = validate(listUsersQuerySchema, c.req.query());
+  return c.json(await userService.list(query));
+});
+
+userRoutes.get('/:id', async (c) => {
+  const { id } = validate(userIdParamsSchema, c.req.param());
+  return c.json(await userService.getById(id));
+});
+<% if (!has.auth) { -%>
+
+userRoutes.post('/', async (c) => {
+  const input = validate(createUserSchema, await readJson(c));
+  return c.json(await userService.create(input), 201);
+});
+<% } -%>
+
+userRoutes.delete('/:id', async (c) => {
+  const { id } = validate(userIdParamsSchema, c.req.param());
+<% if (has.auth) { -%>
+  if (getAuthUser(c).id !== id) throw forbidden('You can only delete your own account');
+<% } -%>
+  await userService.delete(id);
+  return c.body(null, 204);
+});

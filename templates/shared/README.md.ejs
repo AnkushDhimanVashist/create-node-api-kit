@@ -1,0 +1,194 @@
+<%
+  const fwName = { express: 'Express', fastify: 'Fastify', nestjs: 'NestJS', hono: 'Hono' }[framework];
+  const dbName = { prisma: 'PostgreSQL + Prisma', drizzle: 'PostgreSQL + Drizzle', mongoose: 'MongoDB + Mongoose', none: 'In-memory (no database)' }[database];
+-%>
+# <%= projectName %>
+
+A production-ready REST API built with **<%= fwName %>** and **<%= isTs ? 'TypeScript' : 'JavaScript' %>**.
+
+Generated with [create-node-api-kit](https://github.com/AnkushDhimanVashist/create-node-api-kit).
+
+## Stack
+
+| Concern        | Choice                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Framework      | <%= fwName %>                                              |
+| Language       | <%= isTs ? 'TypeScript (strict)' : 'JavaScript (ES modules)' %> |
+| Database       | <%= dbName %>                                              |
+| Validation     | Zod                                                        |
+| Logging        | Pino (pretty in development, JSON in production)           |
+| Testing        | Vitest                                                     |
+| Lint / format  | ESLint + Prettier                                          |
+<% if (has.auth) { -%>
+| Auth           | JWT access tokens + bcrypt password hashing                |
+<% } -%>
+<% if (has.swagger) { -%>
+| API docs       | OpenAPI 3.1 + Swagger UI at `/docs`                        |
+<% } -%>
+<% if (has.redis) { -%>
+| Cache          | Redis (caching + shared rate limiting)                     |
+<% } -%>
+<% if (has.docker) { -%>
+| Containers     | Dockerfile + docker-compose                                |
+<% } -%>
+
+## Getting started
+
+```bash
+<%= install %>
+cp .env.example .env
+<% if (has.docker && (hasDb || has.redis)) { -%>
+docker compose up -d<%= hasDb ? ' db' : '' %><%= has.redis ? ' redis' : '' %>   # start the database locally
+<% } -%>
+<% if (database === 'prisma') { -%>
+<%= run('db:migrate') %>                # create the tables
+<% } -%>
+<% if (database === 'drizzle') { -%>
+<%= run('db:push') %>                   # create the tables
+<% } -%>
+<%= run('dev') %>
+```
+
+The API runs at http://localhost:3000<% if (has.swagger) { %> and the interactive docs at http://localhost:3000/docs<% } %>.
+<% if (!has.docker && hasDb) { -%>
+
+You need a running <%= isPostgres ? 'PostgreSQL' : 'MongoDB' %> server. Put its connection string in `DATABASE_URL` inside `.env`.
+<% } -%>
+
+## Scripts
+
+| Script | What it does |
+| ------ | ------------ |
+| `<%= run('dev') %>` | Start in watch mode (restarts on save) |
+<% if (isTs) { -%>
+| `<%= run('build') %>` | Compile to `dist/` |
+<% } -%>
+| `<%= run('start') %>` | Run in production mode |
+| `<%= run('test') %>` | Run the test suite once |
+| `<%= run('test:watch') %>` | Run tests on every change |
+| `<%= run('lint') %>` | Lint the code |
+| `<%= run('format') %>` | Format all files with Prettier |
+<% if (isTs) { -%>
+| `<%= run('typecheck') %>` | Type-check without emitting |
+<% } -%>
+<% if (database === 'prisma') { -%>
+| `<%= run('db:migrate') %>` | Create and apply a migration after editing `prisma/schema.prisma` |
+| `<%= run('db:deploy') %>` | Apply pending migrations (production) |
+| `<%= run('db:studio') %>` | Browse the data in Prisma Studio |
+<% } -%>
+<% if (database === 'drizzle') { -%>
+| `<%= run('db:generate') %>` | Generate a SQL migration after editing `src/db/schema.<%= ext %>` |
+| `<%= run('db:migrate') %>` | Apply migrations |
+| `<%= run('db:push') %>` | Push the schema directly (quick local prototyping) |
+| `<%= run('db:studio') %>` | Browse the data in Drizzle Studio |
+<% } -%>
+
+## Project structure
+
+```
+<% if (isNest) { -%>
+src/
+├── main.ts                    # entry point: create the Nest app, listen, shutdown hooks
+├── app.module.ts              # root module, wires every feature module together
+├── config/env.ts              # environment variables, validated with Zod at startup
+├── lib/                       # infrastructure: logger, database, <%= has.redis ? 'redis, cache, ' : '' %>shutdown
+├── common/                    # cross-cutting code: errors, filters, pipes<%= has.auth ? ', guards' : '' %>
+└── modules/
+    ├── health/                # liveness + readiness probes
+<% if (has.auth) { -%>
+    ├── auth/                  # register, login, current user (JWT)
+<% } -%>
+    └── users/
+        ├── users.module.ts    # Nest module
+        ├── users.controller.ts# HTTP layer: routes, validation
+        ├── users.service.ts   # business logic
+        ├── user.repository.ts # data access (the only file that talks to the DB)
+        ├── user.schema.ts     # Zod schemas = validation + types + docs
+        └── user.entity.ts     # types + the public (safe) user shape
+<% } else { -%>
+src/
+├── server.<%= ext %>               # entry point: connect, listen, graceful shutdown
+├── app.<%= ext %>                  # builds the <%= fwName %> app (used by server and tests)
+├── config/env.<%= ext %>           # environment variables, validated with Zod at startup
+├── lib/                     # infrastructure: logger, database, <%= has.redis ? 'redis, cache, ' : '' %>shutdown<%= has.auth ? ', jwt, password' : '' %>
+├── common/                  # cross-cutting code: errors, validation, middleware
+<% if (has.swagger) { -%>
+├── docs/                    # OpenAPI document + Swagger UI
+<% } -%>
+<% if (database === 'drizzle') { -%>
+├── db/schema.<%= ext %>            # Drizzle table definitions
+<% } -%>
+└── modules/                 # one folder per feature
+    ├── health/              # liveness + readiness probes
+<% if (has.auth) { -%>
+    ├── auth/                # register, login, current user (JWT)
+<% } -%>
+    └── users/
+        ├── user.routes.<%= ext %>     # HTTP layer: routes, validation, status codes
+        ├── user.service.<%= ext %>    # business logic, no HTTP, no SQL
+        ├── user.repository.<%= ext %> # data access (the only file that talks to the DB)
+        ├── user.schema.<%= ext %>     # Zod schemas = validation + types + docs
+        └── user.entity.<%= ext %>     # types + the public (safe) user shape
+<% } -%>
+tests/                       # API tests, run against an in-memory repository
+```
+
+### How a request flows
+
+```
+HTTP request → route / controller → service → repository → database
+                (validate input)    (rules)    (queries)
+```
+
+Each layer only talks to the one next to it. That keeps business rules out of
+route handlers and lets you swap the database without touching the services.
+
+### Adding a new feature
+
+1. Copy `src/modules/users` to `src/modules/<feature>` and rename the files.
+2. Define the request schemas in `<feature>.schema.<%= ext %>`.
+3. Put data access in the repository and rules in the service.
+4. Register the routes in <%= isNest ? '`app.module.ts`' : '`src/app.' + ext + '`' %>.
+5. Add tests in `tests/`.
+
+## Error format
+
+Every error has the same JSON shape:
+
+```json
+{ "error": { "code": "BAD_REQUEST", "message": "Validation failed", "details": [] } }
+```
+
+Throw `AppError` (or a helper such as `notFound()`) from anywhere and the error
+handler turns it into that response. Unknown errors become a 500 without leaking internals.
+<% if (has.auth) { -%>
+
+## Authentication
+
+```bash
+curl -X POST localhost:3000/api/auth/register -H 'content-type: application/json' \
+  -d '{"email":"ada@example.com","name":"Ada","password":"correct-horse-battery"}'
+# -> { "user": {...}, "accessToken": "eyJ..." }
+
+curl localhost:3000/api/users -H 'authorization: Bearer eyJ...'
+```
+
+Set a long random `JWT_SECRET` in production.
+<% } -%>
+<% if (has.docker) { -%>
+
+## Docker
+
+```bash
+docker compose up --build     # API + dependencies
+```
+<% if (database === 'prisma') { -%>
+
+Apply migrations against the container database from your machine with `<%= run('db:deploy') %>`.
+<% } -%>
+<% } -%>
+
+## Environment variables
+
+See [.env.example](.env.example). Every variable is validated at startup in
+`src/config/env.<%= ext %>`; the server refuses to start with a clear message if one is missing or invalid.

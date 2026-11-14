@@ -1,0 +1,32 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { env<% if (has.redis) { %>, isTest<% } %> } from './config/env.js';
+<% if (has.redis) { -%>
+import { RedisThrottlerStorage } from './common/redis-throttler.storage.js';
+<% } -%>
+import { HealthModule } from './modules/health/health.module.js';
+import { UsersModule } from './modules/users/users.module.js';
+<% if (has.auth) { -%>
+import { AuthModule } from './modules/auth/auth.module.js';
+<% } -%>
+
+@Module({
+  imports: [
+    // Limits each IP to RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_MS.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: env.RATE_LIMIT_WINDOW_MS, limit: env.RATE_LIMIT_MAX }],
+<% if (has.redis) { -%>
+      // Redis-backed counters are shared by every server instance.
+      storage: isTest ? undefined : new RedisThrottlerStorage(),
+<% } -%>
+    }),
+    HealthModule,
+<% if (has.auth) { -%>
+    AuthModule,
+<% } -%>
+    UsersModule,
+  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
+export class AppModule {}

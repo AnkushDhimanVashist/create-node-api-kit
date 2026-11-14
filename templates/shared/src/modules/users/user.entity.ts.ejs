@@ -1,0 +1,47 @@
+/** A user as stored in the database. */
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+<% if (has.auth) { -%>
+  passwordHash: string;
+<% } -%>
+  createdAt: Date;
+}
+
+/** The data needed to create a user. */
+export interface NewUser {
+  email: string;
+  name: string;
+<% if (has.auth) { -%>
+  passwordHash: string;
+<% } -%>
+}
+
+/** A user as returned by the API: safe to send to clients. */
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
+/** Every database adapter implements this contract, so services never care which DB is used. */
+export interface UserRepository {
+  findMany(options: { limit: number; offset: number }): Promise<User[]>;
+  count(): Promise<number>;
+  findById(id: string): Promise<User | null>;
+  findByEmail(email: string): Promise<User | null>;
+  create(data: NewUser): Promise<User>;
+  delete(id: string): Promise<boolean>;
+}
+
+/** Strips private fields (like the password hash) before a user leaves the server. */
+export function toPublicUser(user: User): PublicUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    createdAt: user.createdAt.toISOString(),
+  };
+}

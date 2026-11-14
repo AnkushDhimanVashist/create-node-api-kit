@@ -1,0 +1,53 @@
+<% if (hasDb) { -%>
+import { connectDatabase, disconnectDatabase, pingDatabase } from './db.js';
+<% } -%>
+<% if (has.redis) { -%>
+import { connectRedis, disconnectRedis, pingRedis } from './redis.js';
+<% } -%>
+
+/**
+ * One place to start and stop every external dependency (database, cache, ...).
+ * The server calls these on boot and on shutdown.
+ */
+export async function connectInfrastructure(): Promise<void> {
+<% if (hasDb) { -%>
+  await connectDatabase();
+<% } -%>
+<% if (has.redis) { -%>
+  await connectRedis();
+<% } -%>
+}
+
+export async function disconnectInfrastructure(): Promise<void> {
+<% if (has.redis) { -%>
+  await disconnectRedis();
+<% } -%>
+<% if (hasDb) { -%>
+  await disconnectDatabase();
+<% } -%>
+}
+
+export type DependencyStatus = 'up' | 'down';
+
+/** Used by the readiness probe (GET /health/ready). */
+export async function checkInfrastructure(): Promise<Record<string, DependencyStatus>> {
+  const checks: Record<string, () => Promise<unknown>> = {
+<% if (hasDb) { -%>
+    database: pingDatabase,
+<% } -%>
+<% if (has.redis) { -%>
+    redis: pingRedis,
+<% } -%>
+  };
+  const entries = await Promise.all(
+    Object.entries(checks).map(async ([name, check]) => {
+      try {
+        await check();
+        return [name, 'up'] as const;
+      } catch {
+        return [name, 'down'] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}

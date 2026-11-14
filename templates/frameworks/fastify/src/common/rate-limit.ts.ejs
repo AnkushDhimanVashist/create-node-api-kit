@@ -1,0 +1,22 @@
+import type { RateLimitPluginOptions } from '@fastify/rate-limit';
+import { env<% if (has.redis) { %>, isTest<% } %> } from '../config/env.js';
+<% if (has.redis) { -%>
+import { redis } from '../lib/redis.js';
+<% } -%>
+
+/**
+ * Limits each IP to RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_MS.
+<% if (has.redis) { -%>
+ * Counters live in Redis so the limit is shared by every server instance.
+<% } else { -%>
+ * Counters live in memory: with several server instances, add a shared store (e.g. Redis).
+<% } -%>
+ */
+export const rateLimitOptions: RateLimitPluginOptions = {
+  max: env.RATE_LIMIT_MAX,
+  timeWindow: env.RATE_LIMIT_WINDOW_MS,
+<% if (has.redis) { -%>
+  redis: isTest ? undefined : redis,
+  nameSpace: 'rate-limit:',
+<% } -%>
+};

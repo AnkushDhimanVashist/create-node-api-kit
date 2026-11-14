@@ -1,0 +1,46 @@
+import type { FastifyPluginAsync } from 'fastify';
+<% if (has.auth) { -%>
+import { forbidden } from '../../common/errors.js';
+import { getAuthUser, requireAuth } from '../../common/auth.js';
+<% } -%>
+import { validate } from '../../common/validate.js';
+<% if (has.auth) { -%>
+import { listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } else { -%>
+import { createUserSchema, listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+<% } -%>
+import { userService } from './user.service.js';
+
+/** HTTP layer only: validate input, call the service, send the response. */
+export const userRoutes: FastifyPluginAsync = async (app) => {
+<% if (has.auth) { -%>
+  // Every users route needs a valid access token. New users sign up via POST /api/auth/register.
+  app.addHook('preHandler', requireAuth);
+
+<% } -%>
+  app.get('/', async (request) => {
+    const query = validate(listUsersQuerySchema, request.query);
+    return userService.list(query);
+  });
+
+  app.get('/:id', async (request) => {
+    const { id } = validate(userIdParamsSchema, request.params);
+    return userService.getById(id);
+  });
+<% if (!has.auth) { -%>
+
+  app.post('/', async (request, reply) => {
+    const input = validate(createUserSchema, request.body);
+    return reply.status(201).send(await userService.create(input));
+  });
+<% } -%>
+
+  app.delete('/:id', async (request, reply) => {
+    const { id } = validate(userIdParamsSchema, request.params);
+<% if (has.auth) { -%>
+    if (getAuthUser(request).id !== id) throw forbidden('You can only delete your own account');
+<% } -%>
+    await userService.delete(id);
+    return reply.status(204).send();
+  });
+};

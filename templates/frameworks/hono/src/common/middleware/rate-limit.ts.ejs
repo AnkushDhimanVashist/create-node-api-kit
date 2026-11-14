@@ -1,0 +1,82 @@
+import { getConnInfo } from '@hono/node-server/conninfo';
+import type { Context } from 'hono';
+import { createMiddleware } from 'hono/factory';
+import { env<% if (has.redis) { %>, isTest<% } %> } from '../../config/env.js';
+<% if (has.redis) { -%>
+import { redis } from '../../lib/redis.js';
+<% } -%>
+import { AppError } from '../errors.js';
+
+interface Hit {
+  count: number;
+  resetAt: number;
+}
+
+const windowMs = env.RATE_LIMIT_WINDOW_MS;
+const memory = new Map<string, Hit>();
+
+/** Fixed-window counter kept in this process's memory. */
+function hitMemory(key: string): Hit {
+  const now = Date.now();
+  const current = memory.get(key);
+  if (!current || current.resetAt <= now) {
+    // Drop expired entries from time to time so the map cannot grow forever.
+    if (memory.size > 10_000) {
+      for (const [k, v] of memory) if (v.resetAt <= now) memory.delete(k);
+    }
+    const fresh = { count: 1, resetAt: now + windowMs };
+    memory.set(key, fresh);
+    return fresh;
+  }
+  current.count += 1;
+  return current;
+}
+<% if (has.redis) { -%>
+
+/** Fixed-window counter in Redis: shared by every server instance. */
+async function hitRedis(key: string): Promise<Hit> {
+  const redisKey = `rate-limit:${key}`;
+  const results = await redis.multi().incr(redisKey).pexpire(redisKey, windowMs, 'NX').pttl(redisKey).exec();
+  const count = Number(results?.[0]?.[1] ?? 1);
+  const ttl = Number(results?.[2]?.[1] ?? windowMs);
+  return { count, resetAt: Date.now() + Math.max(ttl, 0) };
+}
+<% } -%>
+
+function clientIp(c: Context): string {
+  try {
+    // Behind a proxy/load balancer, read the client IP from x-forwarded-for instead.
+    return getConnInfo(c).remote.address ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Limits each IP to RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_MS.
+<% if (has.redis) { -%>
+ * Counters live in Redis so the limit is shared by every server instance.
+<% } else { -%>
+ * Counters live in memory: with several server instances, add a shared store (e.g. Redis).
+<% } -%>
+ */
+export const rateLimiter = createMiddleware(async (c, next) => {
+  const key = clientIp(c);
+<% if (has.redis) { -%>
+  const { count, resetAt } = isTest ? hitMemory(key) : await hitRedis(key);
+<% } else { -%>
+  const { count, resetAt } = hitMemory(key);
+<% } -%>
+  const remaining = Math.max(env.RATE_LIMIT_MAX - count, 0);
+  const resetSeconds = Math.ceil((resetAt - Date.now()) / 1000);
+
+  c.header('RateLimit-Limit', String(env.RATE_LIMIT_MAX));
+  c.header('RateLimit-Remaining', String(remaining));
+  c.header('RateLimit-Reset', String(resetSeconds));
+
+  if (count > env.RATE_LIMIT_MAX) {
+    c.header('Retry-After', String(resetSeconds));
+    throw new AppError(429, 'Too many requests, please try again later');
+  }
+  await next();
+});

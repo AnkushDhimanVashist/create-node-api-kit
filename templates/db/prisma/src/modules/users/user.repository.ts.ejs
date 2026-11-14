@@ -1,0 +1,40 @@
+import { prisma } from '../../lib/db.js';
+import type { UserRepository } from './user.entity.js';
+
+const userFields = {
+  id: true,
+  email: true,
+  name: true,
+<% if (has.auth) { -%>
+  passwordHash: true,
+<% } -%>
+  createdAt: true,
+} as const;
+
+/** PostgreSQL implementation of the UserRepository contract, using Prisma. */
+export const userRepository: UserRepository = {
+  findMany({ limit, offset }) {
+    return prisma.user.findMany({
+      select: userFields,
+      take: limit,
+      skip: offset,
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+  count() {
+    return prisma.user.count();
+  },
+  findById(id) {
+    return prisma.user.findUnique({ where: { id }, select: userFields });
+  },
+  findByEmail(email) {
+    return prisma.user.findUnique({ where: { email }, select: userFields });
+  },
+  create(data) {
+    return prisma.user.create({ data, select: userFields });
+  },
+  async delete(id) {
+    const { count } = await prisma.user.deleteMany({ where: { id } });
+    return count > 0;
+  },
+};

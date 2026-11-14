@@ -1,0 +1,63 @@
+import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { corsOrigin } from './config/env.js';
+import type { AppEnv } from './common/context.js';
+import { AppError, notFound, toErrorResponse } from './common/errors.js';
+import { rateLimiter } from './common/middleware/rate-limit.js';
+import { requestLogger } from './common/middleware/request-logger.js';
+import { logger } from './lib/logger.js';
+import { healthRoutes } from './modules/health/health.routes.js';
+import { userRoutes } from './modules/users/user.routes.js';
+<% if (has.auth) { -%>
+import { authRoutes } from './modules/auth/auth.routes.js';
+<% } -%>
+<% if (has.swagger) { -%>
+import { docsRoutes } from './docs/docs.routes.js';
+<% } -%>
+
+/**
+ * Builds the Hono app without starting it, so tests can call `app.request()` directly.
+ */
+export function buildApp() {
+  const app = new Hono<AppEnv>();
+
+  // Security + logging
+  app.use(secureHeaders());
+  app.use(cors({ origin: corsOrigin }));
+  app.use(
+    bodyLimit({
+      maxSize: 1024 * 1024,
+      onError: () => {
+        throw new AppError(413, 'Request body is too large');
+      },
+    }),
+  );
+  app.use(requestLogger);
+
+  // Routes
+  app.route('/health', healthRoutes);
+<% if (has.swagger) { -%>
+  app.route('/docs', docsRoutes);
+<% } -%>
+  app.use('/api/*', rateLimiter);
+<% if (has.auth) { -%>
+  app.route('/api/auth', authRoutes);
+<% } -%>
+  app.route('/api/users', userRoutes);
+
+  // Every error ends up here and leaves as the same JSON shape.
+  app.notFound((c) => {
+    const { statusCode, body } = toErrorResponse(notFound(`Route ${c.req.method} ${c.req.path} not found`));
+    return c.json(body, statusCode as ContentfulStatusCode);
+  });
+  app.onError((err, c) => {
+    const { statusCode, body } = toErrorResponse(err);
+    if (statusCode >= 500) logger.error({ err }, 'Unhandled error');
+    return c.json(body, statusCode as ContentfulStatusCode);
+  });
+
+  return app;
+}

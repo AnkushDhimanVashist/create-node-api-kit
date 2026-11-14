@@ -1,0 +1,37 @@
+import { defineConfig } from 'eslint/config';
+import js from '@eslint/js';
+import globals from 'globals';
+<% if (isTs) { -%>
+import tseslint from 'typescript-eslint';
+<% } -%>
+
+export default defineConfig(
+  { ignores: ['dist', 'coverage', 'node_modules', 'drizzle', 'prisma/migrations'] },
+  js.configs.recommended,
+<% if (isTs) { -%>
+  tseslint.configs.recommended,
+  {
+    languageOptions: { globals: globals.node },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+<% if (isNest) { -%>
+      // Nest's dependency injection needs real (value) imports of injected classes.
+      '@typescript-eslint/consistent-type-imports': 'off',
+<% } else { -%>
+      '@typescript-eslint/consistent-type-imports': 'error',
+<% } -%>
+    },
+  },
+  {
+    files: ['tests/**'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+<% } else { -%>
+  {
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.node },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+<% } -%>
+);

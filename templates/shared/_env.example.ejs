@@ -1,0 +1,27 @@
+# Copy this file to .env and adjust the values.
+# Every variable is validated at startup in src/config/env.<%= ext %>
+
+NODE_ENV=development
+PORT=3000
+HOST=0.0.0.0
+# fatal | error | warn | info | debug | trace | silent
+LOG_LEVEL=debug
+# "*" or a comma separated list, e.g. http://localhost:5173,https://app.example.com
+CORS_ORIGIN=*
+# Max requests per IP per window on /api routes
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW_MS=60000
+<% if (isPostgres) { %>
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app
+<% } -%>
+<% if (database === 'mongoose') { %>
+DATABASE_URL=mongodb://localhost:27017/app
+<% } -%>
+<% if (has.auth) { %>
+# Generate one with: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+JWT_SECRET=change-me-to-a-long-random-string-of-at-least-32-chars
+JWT_EXPIRES_IN=1h
+<% } -%>
+<% if (has.redis) { %>
+REDIS_URL=redis://localhost:6379
+<% } -%>

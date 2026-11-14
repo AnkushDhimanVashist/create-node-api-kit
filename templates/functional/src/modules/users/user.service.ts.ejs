@@ -1,0 +1,63 @@
+import { conflict, notFound } from '../../common/errors.js';
+<% if (has.redis) { -%>
+import { cache } from '../../lib/cache.js';
+<% } -%>
+import { toPublicUser } from './user.entity.js';
+import type { NewUser, PublicUser } from './user.entity.js';
+import { userRepository } from './user.repository.js';
+import type { ListUsersQuery } from './user.schema.js';
+
+<% if (has.redis) { -%>
+const CACHE_PREFIX = 'users:';
+const CACHE_TTL_SECONDS = 60;
+
+<% } -%>
+/**
+ * Business logic for users. Knows nothing about HTTP or the database engine:
+ * routes call the service, the service calls the repository.
+ */
+export const userService = {
+  async list({ limit, offset }: ListUsersQuery) {
+<% if (has.redis) { -%>
+    return cache.wrap(`${CACHE_PREFIX}list:${limit}:${offset}`, CACHE_TTL_SECONDS, async () => {
+      const [users, total] = await Promise.all([
+        userRepository.findMany({ limit, offset }),
+        userRepository.count(),
+      ]);
+      return { items: users.map(toPublicUser), total, limit, offset };
+    });
+<% } else { -%>
+    const [users, total] = await Promise.all([
+      userRepository.findMany({ limit, offset }),
+      userRepository.count(),
+    ]);
+    return { items: users.map(toPublicUser), total, limit, offset };
+<% } -%>
+  },
+
+  async getById(id: string): Promise<PublicUser> {
+    const user = await userRepository.findById(id);
+    if (!user) throw notFound('User not found');
+    return toPublicUser(user);
+  },
+
+  async create(data: NewUser): Promise<PublicUser> {
+    const email = data.email.toLowerCase();
+    if (await userRepository.findByEmail(email)) {
+      throw conflict('A user with this email already exists');
+    }
+    const user = await userRepository.create({ ...data, email });
+<% if (has.redis) { -%>
+    await cache.delByPrefix(CACHE_PREFIX);
+<% } -%>
+    return toPublicUser(user);
+  },
+
+  async delete(id: string): Promise<void> {
+    const deleted = await userRepository.delete(id);
+    if (!deleted) throw notFound('User not found');
+<% if (has.redis) { -%>
+    await cache.delByPrefix(CACHE_PREFIX);
+<% } -%>
+  },
+};

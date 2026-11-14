@@ -1,0 +1,56 @@
+import { Controller, Delete, Get, HttpCode, Param, <% if (!has.auth) { %>Post, Body, <% } %>Query<% if (has.auth) { %>, UseGuards<% } %> } from '@nestjs/common';
+<% if (has.auth) { -%>
+import { forbidden } from '../../common/errors.js';
+import { AuthGuard, CurrentUser } from '../../common/guards/auth.guard.js';
+import type { AuthUser } from '../../lib/jwt.js';
+<% } -%>
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe.js';
+<% if (has.auth) { -%>
+import { listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+import type { ListUsersQuery } from './user.schema.js';
+<% } else { -%>
+import { createUserSchema, listUsersQuerySchema, userIdParamsSchema } from './user.schema.js';
+import type { CreateUserInput, ListUsersQuery } from './user.schema.js';
+<% } -%>
+import { UsersService } from './users.service.js';
+
+/** HTTP layer only: validate input, call the service, send the response. */
+@Controller('api/users')
+<% if (has.auth) { -%>
+// Every users route needs a valid access token. New users sign up via POST /api/auth/register.
+@UseGuards(AuthGuard)
+<% } -%>
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  list(@Query(new ZodValidationPipe(listUsersQuerySchema)) query: ListUsersQuery) {
+    return this.usersService.list(query);
+  }
+
+  @Get(':id')
+  getById(@Param(new ZodValidationPipe(userIdParamsSchema)) params: { id: string }) {
+    return this.usersService.getById(params.id);
+  }
+<% if (!has.auth) { -%>
+
+  @Post()
+  create(@Body(new ZodValidationPipe(createUserSchema)) body: CreateUserInput) {
+    return this.usersService.create(body);
+  }
+<% } -%>
+
+  @Delete(':id')
+  @HttpCode(204)
+  async delete(
+    @Param(new ZodValidationPipe(userIdParamsSchema)) params: { id: string },
+<% if (has.auth) { -%>
+    @CurrentUser() user: AuthUser,
+<% } -%>
+  ) {
+<% if (has.auth) { -%>
+    if (user.id !== params.id) throw forbidden('You can only delete your own account');
+<% } -%>
+    await this.usersService.delete(params.id);
+  }
+}

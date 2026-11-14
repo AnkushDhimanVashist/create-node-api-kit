@@ -1,0 +1,35 @@
+import type { NestExpressApplication } from '@nestjs/platform-express';
+<% if (has.swagger) { -%>
+import { SwaggerModule } from '@nestjs/swagger';
+import type { OpenAPIObject } from '@nestjs/swagger';
+<% } -%>
+import helmet from 'helmet';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { requestLogger } from './common/middleware/request-logger.js';
+import { corsOrigin } from './config/env.js';
+<% if (has.swagger) { -%>
+import { openApiDocument } from './docs/openapi.js';
+<% } -%>
+
+/**
+ * App-wide setup shared by main.ts and the tests, so tests run the exact same app.
+ */
+export function configureApp(app: NestExpressApplication): void {
+<% if (has.swagger) { -%>
+  // CSP is relaxed so Swagger UI can load its inline assets. Tighten it if you drop /docs.
+  app.use(helmet({ contentSecurityPolicy: false }));
+<% } else { -%>
+  app.use(helmet());
+<% } -%>
+  app.enableCors({ origin: corsOrigin });
+  app.useBodyParser('json', { limit: '1mb' });
+  app.use(requestLogger);
+  app.useGlobalFilters(new AllExceptionsFilter());
+<% if (has.swagger) { -%>
+
+  // Swagger UI at /docs, raw spec at /docs/openapi.json
+  SwaggerModule.setup('docs', app, openApiDocument as unknown as OpenAPIObject, {
+    jsonDocumentUrl: 'docs/openapi.json',
+  });
+<% } -%>
+}

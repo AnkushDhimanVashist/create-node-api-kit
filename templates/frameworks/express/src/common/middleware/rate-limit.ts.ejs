@@ -1,0 +1,33 @@
+import { rateLimit } from 'express-rate-limit';
+<% if (has.redis) { -%>
+import { RedisStore } from 'rate-limit-redis';
+import type { RedisReply } from 'rate-limit-redis';
+import { redis } from '../../lib/redis.js';
+<% } -%>
+import { env<% if (has.redis) { %>, isTest<% } %> } from '../../config/env.js';
+import { AppError } from '../errors.js';
+
+/**
+ * Limits each IP to RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_MS.
+<% if (has.redis) { -%>
+ * Counters live in Redis so the limit is shared by every server instance.
+<% } else { -%>
+ * Counters live in memory: with several server instances, add a shared store (e.g. Redis).
+<% } -%>
+ */
+export const rateLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  limit: env.RATE_LIMIT_MAX,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+<% if (has.redis) { -%>
+  store: isTest
+    ? undefined
+    : new RedisStore({
+        prefix: 'rate-limit:',
+        sendCommand: (command: string, ...args: string[]) =>
+          redis.call(command, ...args) as Promise<RedisReply>,
+      }),
+<% } -%>
+  handler: (_req, _res, next) => next(new AppError(429, 'Too many requests, please try again later')),
+});

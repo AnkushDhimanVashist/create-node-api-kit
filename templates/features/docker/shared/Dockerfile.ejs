@@ -1,0 +1,43 @@
+<%
+  const lock = { npm: 'package-lock.json*', pnpm: 'pnpm-lock.yaml*', yarn: 'yarn.lock*', bun: 'bun.lock*' }[pm];
+  const ci = { npm: 'npm ci', pnpm: 'pnpm install --frozen-lockfile', yarn: 'yarn install --frozen-lockfile', bun: 'bun install --frozen-lockfile' }[pm];
+  const prune = { npm: 'npm prune --omit=dev', pnpm: 'pnpm prune --prod', yarn: 'yarn install --production --frozen-lockfile', bun: 'rm -rf node_modules && bun install --production --frozen-lockfile' }[pm];
+  const setup = pm === 'pnpm' ? 'RUN corepack enable\n' : pm === 'yarn' ? 'RUN corepack enable\n' : pm === 'bun' ? 'RUN npm install -g bun\n' : '';
+-%>
+# syntax=docker/dockerfile:1
+
+# ---- deps + build -------------------------------------------------------
+FROM node:22-alpine AS build
+WORKDIR /app
+<%- setup -%>
+COPY package.json <%= lock %> ./
+<% if (database === 'prisma') { -%>
+COPY prisma ./prisma
+COPY prisma.config.<%= ext %> ./
+<% } -%>
+RUN <%= ci %>
+COPY . .
+<% if (isTs) { -%>
+RUN <%= run('build') %>
+<% } -%>
+RUN <%= prune %>
+
+# ---- runtime ------------------------------------------------------------
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build --chown=node:node /app/package.json ./
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+<% if (isTs) { -%>
+COPY --from=build --chown=node:node /app/dist ./dist
+<% } else { -%>
+COPY --from=build --chown=node:node /app/src ./src
+<% } -%>
+<% if (database === 'prisma') { -%>
+COPY --from=build --chown=node:node /app/prisma ./prisma
+<% } -%>
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+CMD ["node", "<%= isTs ? 'dist' : 'src' %>/<%= entry %>.js"]

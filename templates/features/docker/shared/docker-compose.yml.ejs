@@ -1,0 +1,82 @@
+# Local development stack.
+#   docker compose up -d <%= hasDb ? 'db' : '' %><%= has.redis ? ' redis' : '' %>   -> only the dependencies, run the API with `<%= run('dev') %>`
+#   docker compose up --build -> everything, including the API
+services:
+  api:
+    build: .
+    ports:
+      - '3000:3000'
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+<% if (isPostgres) { -%>
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/app
+<% } -%>
+<% if (database === 'mongoose') { -%>
+      DATABASE_URL: mongodb://db:27017/app
+<% } -%>
+<% if (has.redis) { -%>
+      REDIS_URL: redis://redis:6379
+<% } -%>
+<% if (hasDb || has.redis) { -%>
+    depends_on:
+<% if (hasDb) { -%>
+      db:
+        condition: service_healthy
+<% } -%>
+<% if (has.redis) { -%>
+      redis:
+        condition: service_healthy
+<% } -%>
+<% } -%>
+<% if (isPostgres) { -%>
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+<% } -%>
+<% if (database === 'mongoose') { -%>
+
+  db:
+    image: mongo:8
+    ports:
+      - '27017:27017'
+    volumes:
+      - db-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand("ping")']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+<% } -%>
+<% if (has.redis) { -%>
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+<% } -%>
+<% if (hasDb) { -%>
+
+volumes:
+  db-data:
+<% } -%>

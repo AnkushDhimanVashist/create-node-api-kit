@@ -1,0 +1,53 @@
+import { isValidObjectId } from 'mongoose';
+import type { NewUser, User, UserRepository } from './user.entity.js';
+import { UserModel } from './user.model.js';
+
+/** Maps a MongoDB document to the plain User shape the rest of the app uses. */
+function toUser(doc: {
+  _id: { toString(): string };
+  email: string;
+  name: string;
+<% if (has.auth) { -%>
+  passwordHash: string;
+<% } -%>
+  createdAt: Date;
+}): User {
+  return {
+    id: doc._id.toString(),
+    email: doc.email,
+    name: doc.name,
+<% if (has.auth) { -%>
+    passwordHash: doc.passwordHash,
+<% } -%>
+    createdAt: doc.createdAt,
+  };
+}
+
+/** MongoDB implementation of the UserRepository contract, using Mongoose. */
+export const userRepository: UserRepository = {
+  async findMany({ limit, offset }) {
+    const docs = await UserModel.find().sort({ createdAt: -1 }).skip(offset).limit(limit).lean();
+    return docs.map(toUser);
+  },
+  count() {
+    return UserModel.countDocuments();
+  },
+  async findById(id) {
+    if (!isValidObjectId(id)) return null;
+    const doc = await UserModel.findById(id).lean();
+    return doc ? toUser(doc) : null;
+  },
+  async findByEmail(email) {
+    const doc = await UserModel.findOne({ email }).lean();
+    return doc ? toUser(doc) : null;
+  },
+  async create(data: NewUser) {
+    const doc = await UserModel.create(data);
+    return toUser(doc);
+  },
+  async delete(id) {
+    if (!isValidObjectId(id)) return false;
+    const result = await UserModel.deleteOne({ _id: id });
+    return result.deletedCount > 0;
+  },
+};

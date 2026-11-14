@@ -1,0 +1,23 @@
+// Prisma schema: https://pris.ly/d/prisma-schema
+// After editing, run the db:migrate script to create a migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+<% if (has.auth) { -%>
+  passwordHash String   @map("password_hash")
+<% } -%>
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
